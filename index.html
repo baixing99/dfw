@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大富翁 世界之旅 银牌</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #f0ece3;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .board {
+            position: relative;
+            width: 860px;
+            height: 860px;
+            background: #87CEEB;
+            border: none;
+            transform-origin: top center;
+        }
+        @media (max-width: 880px) {
+            body { align-items: flex-start; padding-top: 0; background: #87CEEB; overflow-x: hidden; }
+            .board { transform: scale(calc(100vw / 860)); transform-origin: top left; }
+        }
+        .cell {
+            position: absolute;
+            border: 1px solid #999;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: #333;
+            overflow: hidden;
+            cursor: pointer;
+            transition: filter 0.2s;
+        }
+        .cell:hover { filter: brightness(0.9); }
+        .cell .color-bar { position: absolute; }
+        .cell .name { font-weight: bold; font-size: 10px; z-index: 1; }
+        .cell .price { font-size: 8px; color: #666; z-index: 1; }
+        .corner {
+            width: 90px;
+            height: 90px;
+            font-weight: bold;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+        }
+        .corner .corner-sub { font-size: 9px; margin-top: 2px; }
+        .top .color-bar { bottom: 0; left: 0; right: 0; height: 18px; }
+        .bottom .color-bar { top: 0; left: 0; right: 0; height: 18px; }
+        .left .color-bar { top: 0; right: 0; bottom: 0; width: 18px; }
+        .right .color-bar { top: 0; left: 0; bottom: 0; width: 18px; }
+        .special { background: #f5f5f0; }
+        .chance-cell { background: #FFD1DC; }
+        .destiny-cell { background: #D1E8FF; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-card {
+            position: relative;
+            width: 320px;
+            perspective: 800px;
+        }
+        .card-inner {
+            position: relative;
+            width: 100%;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .card-inner.flipped { transform: rotateY(180deg); }
+        .card-front, .card-back {
+            width: 100%;
+            backface-visibility: hidden;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .card-front img, .card-back img {
+            width: 100%;
+            display: block;
+            border-radius: 12px;
+        }
+        .card-back {
+            position: absolute;
+            top: 0; left: 0;
+            transform: rotateY(180deg);
+        }
+        .modal-btns {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        .modal-btns button {
+            padding: 8px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .btn-flip {
+            background: #3498db;
+            color: #fff;
+        }
+        .btn-flip:hover { background: #2980b9; }
+        .btn-close {
+            background: #e74c3c;
+            color: #fff;
+        }
+        .btn-close:hover { background: #c0392b; }
+        .owner-name {
+            position: absolute;
+            z-index: 4;
+            background: rgba(0,0,0,0.75);
+            color: #fff;
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-size: 9px;
+            font-weight: bold;
+            white-space: nowrap;
+            letter-spacing: 0.5px;
+        }
+        .bottom .owner-name { top: -1px; left: 50%; transform: translateX(-50%); }
+        .top .owner-name { bottom: -1px; left: 50%; transform: translateX(-50%); }
+        .left .owner-name { right: -1px; top: 50%; transform: translateY(-50%); writing-mode: vertical-lr; padding: 4px 1px; }
+        .right .owner-name { left: -1px; top: 50%; transform: translateY(-50%); writing-mode: vertical-lr; padding: 4px 1px; }
+        .owner-buildings {
+            position: absolute;
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: 1px;
+            z-index: 2;
+            max-width: 36px;
+        }
+        .bottom .owner-buildings { bottom: 2px; left: 2px; }
+        .top .owner-buildings { top: 2px; left: 2px; }
+        .left .owner-buildings { left: 2px; top: 2px; flex-direction: column; max-width: none; max-height: 41px; }
+        .right .owner-buildings { right: 2px; top: 2px; flex-direction: column; max-width: none; max-height: 41px; }
+        .house-icon {
+            width: 8px;
+            height: 6px;
+            background: #2ecc71;
+            border-radius: 1px;
+            border: 1px solid #27ae60;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .hotel-icon {
+            width: 8px;
+            height: 6px;
+            background: #e74c3c;
+            border-radius: 1px;
+            border: 1px solid #c0392b;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .mortgaged {
+            opacity: 0.5;
+        }
+        .mortgaged::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 3px,
+                rgba(0,0,0,0.15) 3px,
+                rgba(0,0,0,0.15) 6px
+            );
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        .edit-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .edit-overlay.active { display: flex; }
+        .edit-panel {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 280px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .edit-panel h3 {
+            margin-bottom: 12px;
+            font-size: 16px;
+            color: #333;
+        }
+        .edit-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 8px;
+        }
+        .edit-row label {
+            width: 70px;
+            font-size: 13px;
+            color: #555;
+        }
+        .edit-row input[type="text"],
+        .edit-row input[type="number"] {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .edit-row input[type="number"] { width: 60px; flex: none; }
+        .edit-row input[type="checkbox"] { width: 16px; height: 16px; }
+        .edit-btns {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .edit-btns button {
+            padding: 6px 18px;
+            border: none;
+            border-radius: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .btn-save { background: #27ae60; color: #fff; }
+        .btn-save:hover { background: #219a52; }
+        .btn-clear { background: #e67e22; color: #fff; }
+        .btn-clear:hover { background: #cf6d17; }
+        .btn-cancel { background: #95a5a6; color: #fff; }
+        .btn-cancel:hover { background: #7f8c8d; }
+
+        .modal-title {
+            text-align: center;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="board" id="board"></div>
+    <div class="edit-overlay" id="editOverlay">
+        <div class="edit-panel">
+            <h3 id="editTitle"></h3>
+            <div class="edit-row">
+                <label>玩家</label>
+                <input type="text" id="editOwner" placeholder="输入玩家名称">
+            </div>
+            <div class="edit-row">
+                <label>房屋</label>
+                <input type="number" id="editHouses" min="0" value="0">
+            </div>
+            <div class="edit-row">
+                <label>旅馆</label>
+                <input type="number" id="editHotels" min="0" value="0">
+            </div>
+            <div class="edit-row">
+                <label>抵押</label>
+                <input type="checkbox" id="editMortgage">
+            </div>
+            <div class="edit-btns">
+                <button class="btn-save" id="editSave">保存</button>
+                <button class="btn-clear" id="editClear">清除</button>
+                <button class="btn-cancel" id="editCancel">取消</button>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="modal">
+        <div style="display:flex;flex-direction:column;align-items:center;">
+            <div class="modal-title" id="modalTitle"></div>
+            <div class="modal-card">
+                <div class="card-inner" id="cardInner">
+                    <div class="card-front"><img id="cardFront" src="" alt="正面"></div>
+                    <div class="card-back"><img id="cardBack" src="" alt="反面"></div>
+                </div>
+            </div>
+            <div class="modal-btns">
+                <button class="btn-flip" id="btnFlip">翻转</button>
+                <button class="btn-close" id="btnClose">关闭</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const board = document.getElementById('board');
+        const editOverlay = document.getElementById('editOverlay');
+        const editTitle = document.getElementById('editTitle');
+        const editOwner = document.getElementById('editOwner');
+        const editHouses = document.getElementById('editHouses');
+        const editHotels = document.getElementById('editHotels');
+        const editMortgage = document.getElementById('editMortgage');
+        const editSave = document.getElementById('editSave');
+        const editClear = document.getElementById('editClear');
+        const editCancel = document.getElementById('editCancel');
+
+        const ownerData = {};
+        let currentEditIndex = null;
+        const modal = document.getElementById('modal');
+        const cardInner = document.getElementById('cardInner');
+        const cardFront = document.getElementById('cardFront');
+        const cardBack = document.getElementById('cardBack');
+        const modalTitle = document.getElementById('modalTitle');
+        const btnFlip = document.getElementById('btnFlip');
+        const btnClose = document.getElementById('btnClose');
+
+        const S = 860, C = 90, N = 15;
+        const cellW = (S - 2 * C) / N;
+
+        const cornerMap = {
+            0:  { x: S - C, y: S - C, bg: '#e74c3c', text: '赤道', sub: '起点' },
+            16: { x: 0,     y: S - C, bg: '#3498db', text: '地中海', sub: '' },
+            32: { x: 0,     y: 0,     bg: '#e67e22', text: '北极', sub: '' },
+            48: { x: S - C, y: 0,     bg: '#27ae60', text: '夏威夷', sub: '' }
+        };
+
+        const specialClassMap = {
+            'chance': 'chance-cell',
+            'destiny': 'destiny-cell',
+            'ocean': 'special',
+            '起点': ''
+        };
+
+        function showCard(data) {
+            if (!data.front) return;
+            modalTitle.textContent = data.name + (data.city ? ' - ' + data.city : '');
+            cardFront.src = data.front;
+            cardBack.src = data.back || data.front;
+            cardInner.classList.remove('flipped');
+            modal.classList.add('active');
+        }
+
+        btnFlip.addEventListener('click', () => cardInner.classList.toggle('flipped'));
+        btnClose.addEventListener('click', () => modal.classList.remove('active'));
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('active'); });
+
+        function createCorner(cfg) {
+            const div = document.createElement('div');
+            div.className = 'cell corner';
+            div.style.left = cfg.x + 'px';
+            div.style.top = cfg.y + 'px';
+            div.style.width = C + 'px';
+            div.style.height = C + 'px';
+            div.style.background = cfg.bg;
+            div.innerHTML = `<span class="name">${cfg.text}</span><span class="corner-sub">${cfg.sub}</span>`;
+            board.appendChild(div);
+        }
+
+        function renderOwnerInfo(div, cellIndex) {
+            const oldName = div.querySelector('.owner-name');
+            const oldBldg = div.querySelector('.owner-buildings');
+            if (oldName) oldName.remove();
+            if (oldBldg) oldBldg.remove();
+            div.classList.remove('mortgaged');
+
+            const info = ownerData[cellIndex];
+            if (!info || !info.owner) return;
+
+            if (info.mortgage) div.classList.add('mortgaged');
+
+            const nameTag = document.createElement('span');
+            nameTag.className = 'owner-name';
+            nameTag.textContent = info.owner;
+            div.appendChild(nameTag);
+
+            const bldg = document.createElement('div');
+            bldg.className = 'owner-buildings';
+            for (let i = 0; i < (info.houses || 0); i++) {
+                const h = document.createElement('span');
+                h.className = 'house-icon';
+                bldg.appendChild(h);
+            }
+            for (let i = 0; i < (info.hotels || 0); i++) {
+                const h = document.createElement('span');
+                h.className = 'hotel-icon';
+                bldg.appendChild(h);
+            }
+            if (bldg.children.length) div.appendChild(bldg);
+        }
+
+        function openEdit(cellIndex, data, div) {
+            currentEditIndex = cellIndex;
+            editTitle.textContent = data.name + (data.city ? ' - ' + data.city : '');
+            const info = ownerData[cellIndex] || {};
+            editOwner.value = info.owner || '';
+            editHouses.value = info.houses || 0;
+            editHotels.value = info.hotels || 0;
+            editMortgage.checked = !!info.mortgage;
+            editOverlay._div = div;
+            editOverlay._data = data;
+            editOverlay.classList.add('active');
+        }
+
+        editSave.addEventListener('click', () => {
+            ownerData[currentEditIndex] = {
+                owner: editOwner.value.trim(),
+                houses: parseInt(editHouses.value) || 0,
+                hotels: parseInt(editHotels.value) || 0,
+                mortgage: editMortgage.checked
+            };
+            renderOwnerInfo(editOverlay._div, currentEditIndex);
+            editOverlay.classList.remove('active');
+        });
+
+        editClear.addEventListener('click', () => {
+            delete ownerData[currentEditIndex];
+            renderOwnerInfo(editOverlay._div, currentEditIndex);
+            editOverlay.classList.remove('active');
+        });
+
+        editCancel.addEventListener('click', () => editOverlay.classList.remove('active'));
+        editOverlay.addEventListener('click', (e) => { if (e.target === editOverlay) editOverlay.classList.remove('active'); });
+
+        function createCell(side, idx, data) {
+            const div = document.createElement('div');
+            let cls = 'cell ' + side;
+            if (data.special && specialClassMap[data.special]) cls += ' ' + specialClassMap[data.special];
+            div.className = cls;
+
+            let x, y, w, h;
+            if (side === 'bottom') { w = cellW; h = C; x = C + idx * cellW; y = S - C; }
+            else if (side === 'top') { w = cellW; h = C; x = C + idx * cellW; y = 0; }
+            else if (side === 'left') { w = C; h = cellW; x = 0; y = C + idx * cellW; }
+            else { w = C; h = cellW; x = S - C; y = C + idx * cellW; }
+
+            div.style.left = x + 'px';
+            div.style.top = y + 'px';
+            div.style.width = w + 'px';
+            div.style.height = h + 'px';
+
+            if (data.color) {
+                const bar = document.createElement('div');
+                bar.className = 'color-bar';
+                bar.style.background = data.color;
+                div.appendChild(bar);
+            }
+
+            const nameEl = document.createElement('div');
+            nameEl.className = 'name';
+            nameEl.textContent = data.name;
+            div.appendChild(nameEl);
+
+            if (data.city) {
+                const cityEl = document.createElement('div');
+                cityEl.className = 'price';
+                cityEl.textContent = data.city;
+                div.appendChild(cityEl);
+            }
+            if (data.price) {
+                const priceEl = document.createElement('div');
+                priceEl.className = 'price';
+                priceEl.textContent = data.price;
+                div.appendChild(priceEl);
+            }
+
+            if (data.front) {
+                div.addEventListener('click', () => showCard(data));
+            }
+
+            if (data.color) {
+                div.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    openEdit(data.index, data, div);
+                });
+            }
+
+            board.appendChild(div);
+        }
+
+        const cells = [
+          {index:0,side:"corner",name:"赤道",city:"",price:"",color:"",special:"起点",front:"",back:""},
+          {index:1,side:"bottom",name:"中华人民共和国",city:"北京",price:"$4000",color:"#E53935",front:"images/1/1z.png",back:"images/1/1f.png"},
+          {index:2,side:"bottom",name:"日本",city:"东京",price:"$1000",color:"#E53935",front:"images/1/2z.png",back:"images/1/2f.png"},
+          {index:3,side:"bottom",name:"机会",city:"抽取机会一张",price:"",color:"",special:"chance",front:"",back:""},
+          {index:4,side:"bottom",name:"韩国",city:"首尔",price:"$1000",color:"#E53935",front:"images/1/3z.png",back:"images/1/3f.png"},
+          {index:5,side:"bottom",name:"菲律宾",city:"马尼拉",price:"$600",color:"#29B6F6",front:"images/1/4z.png",back:"images/1/4f.png"},
+          {index:6,side:"bottom",name:"马来西亚",city:"吉隆坡",price:"$2600",color:"#29B6F6",front:"images/1/5z.png",back:"images/1/5f.png"},
+          {index:7,side:"bottom",name:"越南",city:"河内",price:"$2800",color:"#29B6F6",front:"images/1/6z.png",back:"images/1/6f.png"},
+          {index:8,side:"bottom",name:"泰国",city:"曼谷",price:"$1600",color:"#29B6F6",front:"images/1/7z.png",back:"images/1/7f.png"},
+          {index:9,side:"bottom",name:"印度",city:"新德里",price:"$1400",color:"#29B6F6",front:"images/1/8z.png",back:"images/1/8f.png"},
+          {index:10,side:"bottom",name:"太平洋",city:"",price:"",color:"",special:"ocean",front:"",back:""},
+          {index:11,side:"bottom",name:"斯里兰卡",city:"科伦坡",price:"$1400",color:"#B8B42D",front:"images/1/9z.png",back:"images/1/9f.png"},
+          {index:12,side:"bottom",name:"伊朗",city:"德黑兰",price:"$2000",color:"#B8B42D",front:"images/1/10z.png",back:"images/1/10f.png"},
+          {index:13,side:"bottom",name:"伊拉克",city:"巴格达",price:"$1800",color:"#B8B42D",front:"images/1/11z.png",back:"images/1/11f.png"},
+          {index:14,side:"bottom",name:"沙特阿拉伯",city:"利雅德",price:"$1800",color:"#B8B42D",front:"images/1/12z.png",back:"images/1/12f.png"},
+          {index:15,side:"bottom",name:"叙利亚",city:"大马士革",price:"$3500",color:"#B8B42D",front:"images/1/13z.png",back:"images/1/13f.png"},
+          {index:16,side:"corner",name:"地中海",city:"",price:"",color:"",front:"",back:""},
+          {index:17,side:"left",name:"土耳其",city:"安卡拉",price:"$3500",color:"#B8B42D",front:"images/2/14z.png",back:"images/2/14f.png"},
+          {index:18,side:"left",name:"命运",city:"抽取命运一张",price:"",color:"",special:"destiny",front:"",back:""},
+          {index:19,side:"left",name:"黎巴嫩",city:"贝鲁特",price:"$600",color:"#9C27B0",front:"images/2/15z.png",back:"images/2/15f.png"},
+          {index:20,side:"left",name:"以色列",city:"耶路撒冷",price:"$2000",color:"#9C27B0",front:"images/2/16z.png",back:"images/2/16f.png"},
+          {index:21,side:"left",name:"俄罗斯",city:"莫斯科",price:"$1000",color:"#9C27B0",front:"images/2/17z.png",back:"images/2/17f.png"},
+          {index:22,side:"left",name:"波兰",city:"华沙",price:"$1200",color:"#9C27B0",front:"images/2/18z.png",back:"images/2/18f.png"},
+          {index:23,side:"left",name:"德国",city:"柏林",price:"$2400",color:"#9C27B0",front:"images/2/19z.png",back:"images/2/19f.png"},
+          {index:24,side:"left",name:"印度洋",city:"",price:"",color:"",special:"ocean",front:"",back:""},
+          {index:25,side:"left",name:"奥地利",city:"维也纳",price:"$3000",color:"#E91E63",front:"images/2/20z.png",back:"images/2/20f.png"},
+          {index:26,side:"left",name:"瑞士",city:"伯尔尼",price:"$3200",color:"#E91E63",front:"images/2/21z.png",back:"images/2/21f.png"},
+          {index:27,side:"left",name:"法国",city:"巴黎",price:"$3000",color:"#E91E63",front:"images/2/22z.png",back:"images/2/22f.png"},
+          {index:28,side:"left",name:"比利时",city:"布鲁塞尔",price:"$2200",color:"#E91E63",front:"images/2/23z.png",back:"images/2/23f.png"},
+          {index:29,side:"left",name:"机会",city:"抽取机会一张",price:"",color:"",special:"chance",front:"",back:""},
+          {index:30,side:"left",name:"荷兰",city:"阿姆斯特丹",price:"$2400",color:"#0E1412",front:"images/2/24z.png",back:"images/2/24f.png"},
+          {index:31,side:"left",name:"英国",city:"伦敦",price:"$2200",color:"#0E1412",front:"images/2/25z.png",back:"images/2/25f.png"},
+          {index:32,side:"corner",name:"北极",city:"",price:"",color:"",front:"",back:""},
+          {index:33,side:"top",name:"芬兰",city:"赫尔辛基",price:"$2600",color:"#0E1412",front:"images/3/26z.png",back:"images/3/26f.png"},
+          {index:34,side:"top",name:"瑞典",city:"赫尔辛基",price:"$2600",color:"#0E1412",front:"images/3/27z.png",back:"images/3/27f.png"},
+          {index:35,side:"top",name:"丹麦",city:"斯堪的纳尔摩",price:"$2800",color:"#0E1412",front:"images/3/28z.png",back:"images/3/28f.png"},
+          {index:36,side:"top",name:"希腊",city:"",price:"$1600",color:"#008BDB",front:"images/3/29z.png",back:"images/3/29f.png"},
+          {index:37,side:"top",name:"意大利",city:"罗马",price:"$1400",color:"#008BDB",front:"images/3/30z.png",back:"images/3/30f.png"},
+          {index:38,side:"top",name:"命运",city:"抽取命运一张",price:"",color:"",special:"destiny",front:"",back:""},
+          {index:39,side:"top",name:"西班牙",city:"马德里",price:"$1400",color:"#008BDB",front:"images/3/31z.png",back:"images/3/31f.png"},
+          {index:40,side:"top",name:"葡萄牙",city:"里斯本",price:"$2000",color:"#008BDB",front:"images/3/32z.png",back:"images/3/32f.png"},
+          {index:41,side:"top",name:"埃及",city:"开罗",price:"$1800",color:"#02B497",front:"images/3/33z.png",back:"images/3/33f.png"},
+          {index:42,side:"top",name:"摩洛哥",city:"拉巴特",price:"$1800",color:"#02B497",front:"images/3/34z.png",back:"images/3/34f.png"},
+          {index:43,side:"top",name:"赞比亚",city:"卢萨卡",price:"$600",color:"#02B497",front:"images/3/35z.png",back:"images/3/35f.png"},
+          {index:44,side:"top",name:"机会",city:"抽取机会一张",price:"",color:"",special:"chance",front:"",back:""},
+          {index:45,side:"top",name:"南非共和国",city:"比勒陀利亚",price:"$600",color:"#02B497",front:"images/3/36z.png",back:"images/3/36f.png"},
+          {index:46,side:"top",name:"加拿大",city:"渥太华",price:"$3500",color:"#7A8283",front:"images/3/37z.png",back:"images/3/37f.png"},
+          {index:47,side:"top",name:"美国",city:"华盛顿",price:"$3500",color:"#7A8283",front:"images/3/38z.png",back:"images/3/38f.png"},
+          {index:48,side:"corner",name:"夏威夷",city:"",price:"",color:"",front:"",back:""},
+          {index:49,side:"right",name:"墨西哥",city:"墨西哥城",price:"$1200",color:"#7A8283",front:"images/4/39z.png",back:"images/4/39f.png"},
+          {index:50,side:"right",name:"洪都拉斯",city:"特古西加尔巴",price:"$1200",color:"#7A8283",front:"images/4/40z.png",back:"images/4/40f.png"},
+          {index:51,side:"right",name:"尼加拉瓜",city:"马那瓜",price:"$3000",color:"#C94A97",front:"images/4/41z.png",back:"images/4/41f.png"},
+          {index:52,side:"right",name:"哥斯达黎加",city:"圣何塞",price:"$1000",color:"#C94A97",front:"images/4/42z.png",back:"images/4/42f.png"},
+          {index:53,side:"right",name:"命运",city:"抽取命运一张",price:"",color:"",special:"destiny",front:"",back:""},
+          {index:54,side:"right",name:"巴拿马",city:"巴拿马城",price:"$3200",color:"#C94A97",front:"images/4/43z.png",back:"images/4/43f.png"},
+          {index:55,side:"right",name:"古巴",city:"哈瓦那",price:"$3000",color:"#015A01",front:"images/4/44z.png",back:"images/4/44f.png"},
+          {index:56,side:"right",name:"哥伦比亚",city:"波哥大",price:"$1800",color:"#015A01",front:"images/4/45z.png",back:"images/4/45f.png"},
+          {index:57,side:"right",name:"玻利维亚",city:"苏克雷拉巴斯",price:"$1200",color:"#015A01",front:"images/4/46z.png",back:"images/4/46f.png"},
+          {index:58,side:"right",name:"巴西",city:"巴西利亚",price:"$2600",color:"#015A01",front:"images/4/47z.png",back:"images/4/47f.png"},
+          {index:59,side:"right",name:"大西洋",city:"",price:"",color:"",special:"ocean",front:"",back:""},
+          {index:60,side:"right",name:"阿根廷",city:"布宜诺斯艾利斯",price:"$1000",color:"#015A01",front:"images/4/48z.png",back:"images/4/48f.png"},
+          {index:61,side:"right",name:"智利",city:"圣地亚哥",price:"$3500",color:"#015A01",front:"images/4/49z.png",back:"images/4/49f.png"},
+          {index:62,side:"right",name:"澳大利亚",city:"堪培拉",price:"$3200",color:"#E53935",front:"images/4/50z.png",back:"images/4/50f.png"},
+          {index:63,side:"right",name:"新西兰",city:"惠灵顿",price:"$3500",color:"#E53935",front:"images/4/51z.png",back:"images/4/51f.png"}
+        ];
+
+        cells.forEach(c => {
+            if (c.side === 'corner') {
+                const cfg = cornerMap[c.index];
+                if (cfg) createCorner(cfg);
+            }
+        });
+
+        const sideOrder = {
+            bottom: cells.filter(c => c.side === 'bottom').reverse(),
+            left:   cells.filter(c => c.side === 'left').reverse(),
+            top:    cells.filter(c => c.side === 'top'),
+            right:  cells.filter(c => c.side === 'right')
+        };
+
+        sideOrder.bottom.forEach((d, i) => createCell('bottom', i, d));
+        sideOrder.left.forEach((d, i) => createCell('left', i, d));
+        sideOrder.top.forEach((d, i) => createCell('top', i, d));
+        sideOrder.right.forEach((d, i) => createCell('right', i, d));
+    </script>
+</body>
+</html>
